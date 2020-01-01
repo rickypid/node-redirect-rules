@@ -6,22 +6,29 @@ var matchers = require('./matchers');
 var placeholders = require('./placeholders');
 var outputters = requireDir(module, './outputters');
 var outputTypes = [ 'status', 'headers', 'body' ]; // Place in sequential order
+var rules = [];
 
-function createMiddlewareForRules(rules) {
+function createMiddlewareForRules(newRules) {
+  rules = newRules;
   return function(req, res, next) {
     var destination = findDestination(rules, req);
     if (destination) {
       outputTypes
-        .filter(function(key) { return key in destination; })
-        .forEach(function(key) {
-          outputters[key](res, destination[key]);
-        });
+          .filter(function(key) { return key in destination; })
+          .forEach(function(key) {
+            outputters[key](res, destination[key]);
+          });
       res.end();
     } else {
       next();
     }
   };
 }
+
+function setRule(newRules) {
+  rules = newRules;
+}
+module.exports.setRule = setRule;
 
 function findDestination(rules, req) {
   if (!(rules instanceof Array)) {
@@ -44,19 +51,19 @@ function attemptRule(rule, req) {
 
   var allMatchVars = {};
   var allConditionsMatch = Object
-    .keys(conditions)
-    .every(function(prop) {
-      var matcher = matchers[prop];
-      if (!matcher)
-        return false;
+      .keys(conditions)
+      .every(function(prop) {
+        var matcher = matchers[prop];
+        if (!matcher)
+          return false;
 
-      var matchVars = matcher(req, conditions[prop]);
-      if (!matchVars)
-        return false;
+        var matchVars = matcher(req, conditions[prop]);
+        if (!matchVars)
+          return false;
 
-      _.assign(allMatchVars, matchVars);
-      return true;
-    });
+        _.assign(allMatchVars, matchVars);
+        return true;
+      });
 
   if (allConditionsMatch) {
     return generateDestination(rule, req, allMatchVars);
@@ -89,13 +96,13 @@ var DOUBLE_QUESTION_MARKS = /\?{2,}/g;
 
 function generateDestinationUrl(pattern, req, variables) {
   var unwantedDoubleSlashes = SCHEMALESS_PREFIX.test(pattern)
-    ? DOUBLE_SLASHES_AFTER_BEGINNING
-    : DOUBLE_SLASHES_NOT_FOLLOWING_COLON;
+      ? DOUBLE_SLASHES_AFTER_BEGINNING
+      : DOUBLE_SLASHES_NOT_FOLLOWING_COLON;
   return substitutePlaceholders(pattern, variables, req)
-    // Clean up double slashes, which could result from empty placeholders in the URL
-    .replace(unwantedDoubleSlashes, '$1/')
-    // Clean up double question marks, which could result from doing '?{query}'
-    .replace(DOUBLE_QUESTION_MARKS, '?');
+      // Clean up double slashes, which could result from empty placeholders in the URL
+      .replace(unwantedDoubleSlashes, '$1/')
+      // Clean up double question marks, which could result from doing '?{query}'
+      .replace(DOUBLE_QUESTION_MARKS, '?');
 }
 
 var PLACEHOLDERS = /\{([^}]*?)}/g;
@@ -104,11 +111,11 @@ function substitutePlaceholders(value, variables, req) {
   var type = typeof(value);
   if (type === 'object') {
     return Object
-      .keys(value)
-      .reduce(function(result, prop) {
-        result[prop] = substitutePlaceholders(value[prop], variables, req);
-        return result;
-      }, {});
+        .keys(value)
+        .reduce(function(result, prop) {
+          result[prop] = substitutePlaceholders(value[prop], variables, req);
+          return result;
+        }, {});
   }
 
   if (type !== 'string')
